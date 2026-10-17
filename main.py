@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from api.index import app
 
 app = FastAPI()
 
