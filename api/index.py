@@ -4,7 +4,7 @@ app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Render Kakao Bot Server is running"}
+    return {"status": "ok", "message": "Vercel Fast Server is running"}
 
 @app.post("/api/chat")
 async def chat_handler(request: Request):
@@ -14,7 +14,7 @@ async def chat_handler(request: Request):
     except Exception:
         user_message = ""
     
-    reply_text = f"안녕하세요! 보내주신 메시지: '{user_message}'\nRender 무료 서버에서 정상 응답했습니다."
+    reply_text = f"안녕하세요! 보내주신 메시지: '{user_message}'\nVercel 서버에서 초고속으로 응답했습니다."
     
     return {
         "version": "2.0",
