@@ -19,7 +19,13 @@ class ChartTests(unittest.TestCase):
 
     def test_provider_parsing(self):
         with patch("requests.get") as get:
-            get.return_value.content = b'<protocol><chartdata><item data="20261016|100|120|90|110|1000"/></chartdata></protocol>'
+            import requests
+            response = requests.Response()
+            response.status_code = 200
+            response.encoding = "EUC-KR"
+            response._content = ('<?xml version="1.0" encoding="EUC-KR" ?>'
+                '<protocol><chartdata name="이뮨온시아"><item data="20261016|100|120|90|110|1000"/></chartdata></protocol>').encode("euc-kr")
+            get.return_value = response
             df = fetch_candles("424870")
         self.assertEqual(df.Close.iloc[-1], 110)
         self.assertEqual(df.index[-1], pd.Timestamp("2026-10-16"))

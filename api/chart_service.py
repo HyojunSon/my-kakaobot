@@ -29,7 +29,9 @@ def fetch_candles(symbol):
         "symbol": symbol, "timeframe": "day", "count": "10000", "requestType": "0"
     }, timeout=(2, 8), headers={"User-Agent": "Mozilla/5.0"})
     r.raise_for_status()
-    rows = [n.attrib.get("data", "").split("|")[:6] for n in ET.fromstring(r.content).iter("item")]
+    # Naver declares EUC-KR. Expat cannot parse that multibyte encoding
+    # directly from bytes; requests decodes the HTTP charset first.
+    rows = [n.attrib.get("data", "").split("|")[:6] for n in ET.fromstring(r.text).iter("item")]
     rows = [r for r in rows if len(r) == 6]
     if not rows:
         raise ValueError("No candles")
