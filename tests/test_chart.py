@@ -58,6 +58,25 @@ class ApiTests(unittest.TestCase):
             self.skipTest("Install FastAPI to run HTTP integration tests")
         self.client = TestClient(app)
 
+    def test_every_exported_stock_command_and_image_route(self):
+        from api.chart_service import load_snapshot
+        for stock in load_snapshot()["stocks"]:
+            for query in {stock["code"], stock["name"]}:
+                with self.subTest(code=stock["code"], query=query):
+                    response = self.client.post("/api/chat", json={
+                        "userRequest": {"utterance": f"/차트 {query}"}
+                    })
+                    self.assertEqual(response.status_code, 200)
+                    outputs = response.json()["template"]["outputs"]
+                    self.assertEqual(len(outputs), 2, outputs)
+                    url = outputs[1]["simpleImage"]["imageUrl"]
+                    self.assertIn(f"/api/chart/{stock['code']}.png?", url)
+            with self.subTest(image=stock["code"]):
+                with patch("api.index.render_chart", return_value=b"PNG") as render:
+                    response = self.client.get(f"/api/chart/{stock['code']}.png")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(render.call_args.args[0]["code"], stock["code"])
+
     def test_webhook_does_not_fetch_or_render(self):
         with patch("api.chart_service.fetch_candles") as fetch:
             response = self.client.post("/api/chat",json={"userRequest":{"utterance":"/차트 이뮨온시아"}})
