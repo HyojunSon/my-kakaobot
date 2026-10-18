@@ -25,7 +25,7 @@ Vercel 프로젝트 루트는 `my-kakaobot`입니다. `PUBLIC_BASE_URL`을 공�
 
 웹훅 응답 시간과 이미지 표시 시간은 다릅니다. 이미지 생성 실패 시 카카오에서 이미지가 표시되지 않을 수 있으며 이미지 URL과 서버 로그를 확인해야 합니다. 실제 Vercel/카카오 환경의 콜드 스타트와 다운로드 제한은 배포 후 검증해야 합니다. 이미지 표시까지 5초를 보장하지 않습니다.
 
-Vercel에서 한글을 표시하려면 배포 가능한 한글 TTF를 `assets/chart-font.ttf`로 추가하세요. 없으면 서버 설치 폰트를 사용하며 한글 글리프가 없을 수 있습니다. Matplotlib 캐시는 Vercel에서 쓰기 가능한 임시 디렉터리를 사용합니다.
+한글 표시는 함께 포함된 나눔고딕 `assets/chart-font.ttf`를 파일 경로로 직접 지정합니다. `assets/OFL.txt` 라이선스와 함께 두 파일을 배포에 포함하세요. 출처: Google Fonts 저장소의 `ofl/nanumgothic`. Matplotlib 캐시는 Vercel에서 쓰기 가능한 임시 디렉터리를 사용합니다.
 
 ## 테스트
 

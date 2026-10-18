@@ -4,6 +4,13 @@ import pandas as pd
 from api.chart_service import line_values, resolve_stock, render_chart, fetch_candles
 
 class ChartTests(unittest.TestCase):
+    def test_bundled_font_contains_korean_title(self):
+        from api.chart_service import ROOT
+        from matplotlib.ft2font import FT2Font
+        font = FT2Font(str(ROOT / "assets/chart-font.ttf"))
+        for char in "이뮨온시아삼성전자":
+            self.assertNotEqual(font.get_char_index(ord(char)), 0, char)
+
     def test_exact_name_and_code_only(self):
         data = {"stocks": [{"code":"424870", "name":"이뮨온시아"}]}
         self.assertEqual(resolve_stock("이뮨온시아", data)["code"], "424870")

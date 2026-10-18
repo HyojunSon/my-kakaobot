@@ -73,11 +73,11 @@ def render_candles(stock, drawings, df):
     from matplotlib import font_manager
     font = ROOT / "assets/chart-font.ttf"
     if font.exists():
-        font_manager.fontManager.addfont(str(font))
-        family = font_manager.FontProperties(fname=font).get_name()
+        title_font = font_manager.FontProperties(fname=str(font), size=11)
     else:
         family = next((name for name in ("Malgun Gothic", "NanumGothic", "Noto Sans CJK KR")
                        if any(f.name == name for f in font_manager.fontManager.ttflist)), "DejaVu Sans")
+        title_font = font_manager.FontProperties(family=family, size=11)
     first = int(df.index.searchsorted(df.index[-1] - pd.DateOffset(months=6)))
     sub = df.iloc[first:]
     x = np.arange(len(sub))
@@ -109,7 +109,7 @@ def render_candles(stock, drawings, df):
     pad = max((high-low)*.08, high*.01, 1)
     ax.set_ylim(low-pad, high+pad)
     ax.set_xlim(-1,len(sub))
-    ax.set_title(f"{stock['name']} ({stock['code']}) | {sub.Close.iloc[-1]:,.0f} KRW | {sub.index[-1]:%Y-%m-%d}", fontfamily=family, fontsize=11)
+    ax.set_title(f"{stock['name']} ({stock['code']}) | {sub.Close.iloc[-1]:,.0f} KRW | {sub.index[-1]:%Y-%m-%d}", fontproperties=title_font)
     ax.legend(loc="upper left", fontsize=8)
     vol.bar(x, sub.Volume, color=colors, width=.65)
     ticks = np.unique(np.linspace(0,len(sub)-1,min(7,len(sub))).astype(int))
