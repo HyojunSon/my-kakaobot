@@ -14,11 +14,24 @@ RENDER_LOCK = threading.Lock()
 
 @lru_cache(maxsize=1)
 def load_snapshot():
-    return json.loads((ROOT / "data/hts_snapshot.json").read_text(encoding="utf-8"))
+    snapshot = json.loads((ROOT / "data/hts_snapshot.json").read_text(encoding="utf-8"))
+    catalog_path = ROOT / "data/stock_catalog.json"
+    if catalog_path.exists():
+        stocks = {s["code"]: s for s in json.loads(catalog_path.read_text(encoding="utf-8"))}
+        for stock in snapshot["stocks"]:
+            if stock["code"] not in stocks:
+                stocks[stock["code"]] = stock
+            elif stock["name"] != stock["code"] and stock["name"] != stocks[stock["code"]]["name"]:
+                stocks[stock["code"]].setdefault("aliases", []).append(stock["name"])
+        snapshot["stocks"] = list(stocks.values())
+    return snapshot
 
 def resolve_stock(query, snapshot):
     query = "".join(query.split()).casefold()
-    matches = [s for s in snapshot["stocks"] if query in (s["code"], "".join(s["name"].split()).casefold())]
+    matches = [s for s in snapshot["stocks"] if query in {
+        "".join(value.split()).casefold()
+        for value in (s["code"], s["name"], *s.get("aliases", []))
+    }]
     return matches[0] if len(matches) == 1 else None
 
 def fetch_candles(symbol):

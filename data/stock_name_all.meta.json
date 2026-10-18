@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-10-18T13:56:17.617983+00:00",
+  "source": "FinanceDataReader KRX listing + Naver ETF listing",
+  "source_files": [
+    "krx_listing.csv",
+    "etf_listing.csv"
+  ],
+  "entries": 4043,
+  "markets": {
+    "KOSPI": 940,
+    "KOSDAQ GLOBAL": 50,
+    "KOSDAQ": 1772,
+    "KONEX": 105,
+    "ETF": 1176
+  },
+  "format": "UTF-8 CSV, no header; column 1 entry, columns 2-7 synonyms",
+  "scope": "KRX stocks including preferred shares/SPACs and domestic-listed ETFs; excludes ETNs"
+}

@@ -4,6 +4,22 @@ import pandas as pd
 from api.chart_service import line_values, resolve_stock, render_chart, fetch_candles
 
 class ChartTests(unittest.TestCase):
+    def test_alias_catalog_and_no_ambiguous_tokens(self):
+        from api.chart_service import load_snapshot
+        data = load_snapshot()
+        expected = {"삼전":"005930", "삼전우":"005935", "하닉":"000660",
+                    "엘전":"066570", "엘전우":"066575", "네이버":"035420",
+                    "코덱스 200":"069500"}
+        for alias, code in expected.items():
+            with self.subTest(alias=alias):
+                self.assertEqual(resolve_stock(alias, data)["code"], code)
+        owners = {}
+        for stock in data["stocks"]:
+            for token in (stock["name"], stock["code"], *stock.get("aliases", [])):
+                key = "".join(token.split()).casefold()
+                owners.setdefault(key, set()).add(stock["code"])
+        self.assertTrue(all(len(codes) == 1 for codes in owners.values()))
+
     def test_bundled_font_contains_korean_title(self):
         from api.chart_service import ROOT
         from matplotlib.ft2font import FT2Font
@@ -58,9 +74,20 @@ class ApiTests(unittest.TestCase):
             self.skipTest("Install FastAPI to run HTTP integration tests")
         self.client = TestClient(app)
 
+    def test_abbreviated_chart_commands(self):
+        for alias, code in [("삼전", "005930"), ("하닉", "000660"), ("엘전", "066570"),
+                            ("코덱스200", "069500"), ("KODEX 200", "069500")]:
+            with self.subTest(alias=alias):
+                r = self.client.post("/api/chat", json={"userRequest": {"utterance": f"/차트 {alias}"}})
+                self.assertIn(f"/api/chart/{code}.png?", r.json()["template"]["outputs"][0]["simpleImage"]["imageUrl"])
+
     def test_every_exported_stock_command_and_image_route(self):
-        from api.chart_service import load_snapshot
-        for stock in load_snapshot()["stocks"]:
+        import json
+        from api.chart_service import ROOT
+        # Exercise each HTS export through HTTP; full catalog collision
+        # coverage is handled separately without thousands of HTTP calls.
+        exported = json.loads((ROOT / "data/hts_snapshot.json").read_text(encoding="utf-8"))
+        for stock in exported["stocks"]:
             for query in {stock["code"], stock["name"]}:
                 with self.subTest(code=stock["code"], query=query):
                     response = self.client.post("/api/chat", json={
@@ -68,8 +95,8 @@ class ApiTests(unittest.TestCase):
                     })
                     self.assertEqual(response.status_code, 200)
                     outputs = response.json()["template"]["outputs"]
-                    self.assertEqual(len(outputs), 2, outputs)
-                    url = outputs[1]["simpleImage"]["imageUrl"]
+                    self.assertEqual(len(outputs), 1, outputs)
+                    url = outputs[0]["simpleImage"]["imageUrl"]
                     self.assertIn(f"/api/chart/{stock['code']}.png?", url)
             with self.subTest(image=stock["code"]):
                 with patch("api.index.render_chart", return_value=b"PNG") as render:
@@ -81,7 +108,7 @@ class ApiTests(unittest.TestCase):
         with patch("api.chart_service.fetch_candles") as fetch:
             response = self.client.post("/api/chat",json={"userRequest":{"utterance":"/차트 이뮨온시아"}})
         self.assertEqual(response.status_code,200)
-        image = response.json()["template"]["outputs"][1]["simpleImage"]["imageUrl"]
+        image = response.json()["template"]["outputs"][0]["simpleImage"]["imageUrl"]
         self.assertIn("/api/chart/424870.png?request=",image)
         fetch.assert_not_called()
 

@@ -25,7 +25,7 @@ async def chat_handler(request: Request):
         if not isinstance(utterance, str):
             raise ValueError()
     except (ValueError, KeyError, TypeError):
-        return text_response("명령을 읽지 못했습니다. /차트 이뮨온시아 형식으로 입력해 주세요.")
+        return text_response("명령을 읽지 못했습니다. /차트 삼성전자 형식으로 입력해 주세요.")
     match = re.fullmatch(r"/차트\s+(.+?)\s*", utterance.strip())
     if not match:
         return text_response("사용법: /차트 종목명 또는 /차트 6자리종목코드\n예: /차트 이뮨온시아")
@@ -39,15 +39,13 @@ async def chat_handler(request: Request):
         return text_response("등록된 정확한 종목명 또는 6자리 종목코드를 입력해 주세요.")
     base = os.environ.get("PUBLIC_BASE_URL", str(request.base_url)).rstrip("/")
     image_url = f"{base}/api/chart/{stock['code']}.png?request={secrets.token_hex(12)}"
-    count = len(snapshot.get("drawings", {}).get(stock["code"], []))
-    note = f"HTS 저장선 {count}개" if count else "저장된 선이 없어 캔들만 표시합니다."
-    result = text_response(f"{stock['name']} ({stock['code']}) 최근 6개월 일봉\n{note}\n이미지 조회 시 제공처 최신 시세 반영 (지연 가능)")
-    result["template"]["outputs"].append({"simpleImage": {"imageUrl": image_url, "altText": f"{stock['name']} 최근 6개월 차트"}})
-    return result
+    return {"version": "2.0", "template": {"outputs": [
+        {"simpleImage": {"imageUrl": image_url, "altText": f"{stock['name']} 최근 6개월 차트"}}
+    ]}}
 
 @app.get("/api/chart/{symbol}.png")
 async def chart_image(symbol: str):
-    if not re.fullmatch(r"\d{6}", symbol):
+    if not re.fullmatch(r"[0-9A-Z]{6}", symbol):
         raise HTTPException(404, "Unknown symbol")
     try:
         snapshot = load_snapshot()
