@@ -47,6 +47,8 @@ def export(refresh=False, refresh_etf=False):
     if etf_listing.exists():
         with etf_listing.open(encoding="utf-8-sig", newline="") as f:
             stocks.extend(csv.DictReader(f))
+    with (ROOT / "data/index_listing.csv").open(encoding="utf-8-sig", newline="") as f:
+        stocks.extend(csv.DictReader(f))
     if len({s["Code"] for s in stocks}) != len(stocks):
         raise ValueError("Duplicate stock/ETF codes")
     aliases = json.loads((ROOT / "data/stock_aliases.json").read_text(encoding="utf-8"))
@@ -92,10 +94,10 @@ def export(refresh=False, refresh_etf=False):
     metadata = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "FinanceDataReader KRX listing + Naver ETF listing",
-        "source_files": ["krx_listing.csv", "etf_listing.csv"], "entries": len(rows),
+        "source_files": ["krx_listing.csv", "etf_listing.csv", "index_listing.csv"], "entries": len(rows),
         "markets": dict(Counter(s["Market"] for s in stocks)),
         "format": "UTF-8 CSV, no header; column 1 entry, columns 2-7 synonyms",
-        "scope": "KRX stocks including preferred shares/SPACs and domestic-listed ETFs; excludes ETNs",
+        "scope": "KRX stocks, domestic-listed ETFs, KOSPI/KOSDAQ indices; excludes ETNs",
     }
     (ROOT / "data/stock_name_all.meta.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")

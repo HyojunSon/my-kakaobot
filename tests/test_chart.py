@@ -4,12 +4,29 @@ import pandas as pd
 from api.chart_service import line_values, resolve_stock, render_chart, fetch_candles
 
 class ChartTests(unittest.TestCase):
+    def test_history_range_includes_old_anchors(self):
+        from api.chart_service import history_count
+        self.assertEqual(history_count([]), 1000)
+        self.assertEqual(history_count([{"type":"horizontal", "price":100}]), 1000)
+        self.assertGreater(history_count([{"type":"trendline", "start_date":"2015-01-01"}]), 3000)
+        self.assertEqual(history_count([{"type":"trendline", "start_date":"1990-01-01"}]), 10000)
+
+    def test_short_provider_history_retries_for_old_anchor(self):
+        df = pd.DataFrame({"Open":[100],"High":[110],"Low":[90],"Close":[105],"Volume":[1]},
+                          index=pd.to_datetime(["2026-10-16"]))
+        snapshot = {"drawings":{"005930":[{"type":"trendline", "start_date":"2026-01-01"}]}}
+        with patch("api.chart_service.fetch_candles", return_value=df) as fetch, \
+             patch("api.chart_service.render_candles", return_value=b"png"):
+            render_chart({"code":"005930"}, snapshot)
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(fetch.call_args.kwargs["count"], 10000)
+
     def test_alias_catalog_and_no_ambiguous_tokens(self):
         from api.chart_service import load_snapshot
         data = load_snapshot()
         expected = {"삼전":"005930", "삼전우":"005935", "하닉":"000660",
                     "엘전":"066570", "엘전우":"066575", "네이버":"035420",
-                    "코덱스 200":"069500"}
+                    "코덱스 200":"069500", "코스피":"KOSPI", "kosdaq":"KOSDAQ"}
         for alias, code in expected.items():
             with self.subTest(alias=alias):
                 self.assertEqual(resolve_stock(alias, data)["code"], code)
@@ -73,10 +90,14 @@ class ApiTests(unittest.TestCase):
         except ImportError:
             self.skipTest("Install FastAPI to run HTTP integration tests")
         self.client = TestClient(app)
+        analysis = patch("api.index.analyze_chart", return_value="규칙 분석 테스트")
+        analysis.start()
+        self.addCleanup(analysis.stop)
 
     def test_abbreviated_chart_commands(self):
         for alias, code in [("삼전", "005930"), ("하닉", "000660"), ("엘전", "066570"),
-                            ("코덱스200", "069500"), ("KODEX 200", "069500")]:
+                            ("코덱스200", "069500"), ("KODEX 200", "069500"),
+                            ("코스피", "KOSPI"), ("코스닥", "KOSDAQ")]:
             with self.subTest(alias=alias):
                 r = self.client.post("/api/chat", json={"userRequest": {"utterance": f"/차트 {alias}"}})
                 self.assertIn(f"/api/chart/{code}.png?", r.json()["template"]["outputs"][0]["simpleImage"]["imageUrl"])
@@ -95,7 +116,7 @@ class ApiTests(unittest.TestCase):
                     })
                     self.assertEqual(response.status_code, 200)
                     outputs = response.json()["template"]["outputs"]
-                    self.assertEqual(len(outputs), 1, outputs)
+                    self.assertEqual(len(outputs), 2, outputs)
                     url = outputs[0]["simpleImage"]["imageUrl"]
                     self.assertIn(f"/api/chart/{stock['code']}.png?", url)
             with self.subTest(image=stock["code"]):
@@ -118,6 +139,8 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(r.content,b"PNG")
             self.assertEqual(r.headers["content-type"],"image/png")
             self.assertEqual(r.headers["cache-control"],"no-store")
+            for symbol in ("KOSPI", "KOSDAQ"):
+                self.assertEqual(self.client.get(f"/api/chart/{symbol}.png").status_code, 200)
         with patch("api.index.render_chart",side_effect=ValueError("no data")):
             self.assertEqual(self.client.get("/api/chart/424870.png").status_code,502)
 

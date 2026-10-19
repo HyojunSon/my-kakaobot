@@ -22354,5 +22354,15 @@
     "code": "950260",
     "name": "인제니아테라퓨틱스(Reg.S)",
     "aliases": []
+  },
+  {
+    "code": "KOSDAQ",
+    "name": "코스닥",
+    "aliases": []
+  },
+  {
+    "code": "KOSPI",
+    "name": "코스피",
+    "aliases": []
   }
 ]

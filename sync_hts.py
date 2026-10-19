@@ -10,9 +10,10 @@ def sync():
     watch = json.loads((source / "watchlist.json").read_text(encoding="utf-8"))
     stocks = {s["code"]:s["name"] for s in watch["items"]}
     stocks["424870"] = "이뮨온시아"
+    stocks.update({"KOSPI": "코스피", "KOSDAQ": "코스닥"})
     drawings = {}
     for path in sorted((source / "drawings").glob("*.json")):
-        if len(path.stem) != 6 or not path.stem.isdigit():
+        if path.stem not in {"KOSPI", "KOSDAQ"} and (len(path.stem) != 6 or not path.stem.isalnum()):
             continue
         drawings[path.stem] = json.loads(path.read_text(encoding="utf-8"))
         stocks.setdefault(path.stem,path.stem)

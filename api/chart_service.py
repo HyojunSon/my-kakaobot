@@ -3,6 +3,8 @@ import io
 import json
 import os
 import threading
+import logging
+from time import perf_counter
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -11,6 +13,25 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 RENDER_LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+def history_count(drawings):
+    # 1,000 sessions gives EMA120 over 800 warm-up sessions before the
+    # visible six months. Calendar days are a conservative session bound.
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+    count = 1000
+    for drawing in drawings:
+        if drawing.get("type") != "trendline":
+            continue
+        for key in ("start_date", "end_date"):
+            try:
+                date = datetime.strptime(drawing[key], "%Y-%m-%d").date()
+                count = max(count, (today-date).days + 60)
+            except (KeyError, ValueError, TypeError):
+                continue
+    return min(count, 10000)
 
 @lru_cache(maxsize=1)
 def load_snapshot():
@@ -34,12 +55,12 @@ def resolve_stock(query, snapshot):
     }]
     return matches[0] if len(matches) == 1 else None
 
-def fetch_candles(symbol):
+def fetch_candles(symbol, count=10000):
     """Fresh provider daily data, not a guaranteed realtime exchange feed."""
     import pandas as pd
     import requests
     r = requests.get("https://fchart.stock.naver.com/sise.nhn", params={
-        "symbol": symbol, "timeframe": "day", "count": "10000", "requestType": "0"
+        "symbol": symbol, "timeframe": "day", "count": str(count), "requestType": "0"
     }, timeout=(2, 8), headers={"User-Agent": "Mozilla/5.0"})
     r.raise_for_status()
     # Naver declares EUC-KR. Expat cannot parse that multibyte encoding
@@ -70,10 +91,34 @@ def line_values(d, dates, start, end):
     slope = (y2-y1)/(x2-x1)
     return y1+slope*(start-x1), y1+slope*(end-x1)
 
+def chart_data(stock, snapshot):
+    drawings = snapshot.get("drawings", {}).get(stock["code"], [])
+    count = history_count(drawings)
+    df = fetch_candles(stock["code"], count=count)
+    # If the provider returns fewer sessions than requested, retry the
+    # original history range when an older anchor might otherwise be lost.
+    earliest = df.index[0].strftime("%Y-%m-%d")
+    if count < 10000 and any(
+        isinstance(d.get(key), str) and d[key] < earliest
+        for d in drawings if d.get("type") == "trendline"
+        for key in ("start_date", "end_date")
+    ):
+        df = fetch_candles(stock["code"], count=10000)
+    return df, drawings
+
+
 def render_chart(stock, snapshot):
-    df = fetch_candles(stock["code"])
+    started = perf_counter()
+    df, drawings = chart_data(stock, snapshot)
+    fetched = perf_counter()
     with RENDER_LOCK:
-        return render_candles(stock, snapshot.get("drawings", {}).get(stock["code"], []), df)
+        acquired = perf_counter()
+        png = render_candles(stock, drawings, df)
+    finished = perf_counter()
+    logger.info("chart_timing symbol=%s candles=%d fetch_ms=%.1f lock_ms=%.1f render_ms=%.1f total_ms=%.1f bytes=%d",
+                stock["code"], len(df), (fetched-started)*1000, (acquired-fetched)*1000,
+                (finished-acquired)*1000, (finished-started)*1000, len(png))
+    return png
 
 def render_candles(stock, drawings, df):
     import tempfile
@@ -106,7 +151,7 @@ def render_candles(stock, drawings, df):
         bodies.append([(i-.32,lo), (i-.32,hi), (i+.32,hi), (i+.32,lo)])
     ax.add_collection(PolyCollection(bodies, facecolors=colors, edgecolors=colors, linewidths=.5))
     for p, c in [(5,"#F59E0B"),(20,"#DC2626"),(60,"#10B981"),(120,"#6366F1")]:
-        ax.plot(x, df.Close.ewm(span=p, adjust=False).mean().iloc[first:], color=c, linewidth=.8, label=f"EMA{p}")
+        ax.plot(x, df.Close.ewm(span=p, adjust=False).mean().iloc[first:], color=c, linewidth=.45, label=f"EMA{p}")
     dates = {d.strftime("%Y-%m-%d"): i for i,d in enumerate(df.index)}
     skipped = 0
     for d in drawings:
@@ -115,25 +160,49 @@ def render_candles(stock, drawings, df):
             if values is None or not np.isfinite(values).all():
                 skipped += 1
                 continue
-            ax.plot([0,len(sub)-1], values, color=d.get("color","#D97706"), linewidth=1.3, linestyle="--")
+            ax.plot([0,len(sub)-1], values, color=d.get("color","#D97706"), linewidth=1.3, linestyle="-")
         except (ValueError, KeyError, TypeError):
             skipped += 1
     low, high = sub.Low.min(), sub.High.max()
     pad = max((high-low)*.08, high*.01, 1)
     ax.set_ylim(low-pad, high+pad)
     ax.set_xlim(-1,len(sub))
-    ax.set_title(f"{stock['name']} ({stock['code']}) | {sub.Close.iloc[-1]:,.0f} KRW | {sub.index[-1]:%Y-%m-%d}", fontproperties=title_font)
+    price_label = (f"{sub.Close.iloc[-1]:,.2f} pt" if stock["code"] in {"KOSPI", "KOSDAQ"}
+                   else f"{sub.Close.iloc[-1]:,.0f} KRW")
+    latest = float(sub.Close.iloc[-1])
+    previous = float(df.Close.iloc[-2]) if len(df) > 1 else latest
+    price_color = "#E11D48" if latest >= previous else "#2563EB"
+    ax.axhline(latest, color=price_color, linewidth=.55, alpha=.4)
+    ax.annotate(price_label, xy=(1, latest), xycoords=("axes fraction", "data"),
+                xytext=(6, 0), textcoords="offset points", va="center", ha="left",
+                fontsize=8, color="white", annotation_clip=False,
+                bbox={"boxstyle": "round,pad=.3", "fc": price_color, "ec": "none"}, zorder=10)
+    ax.set_title(f"{stock['name']} ({stock['code']}) | {price_label} | {sub.index[-1]:%Y-%m-%d}", fontproperties=title_font)
     ax.legend(loc="upper left", fontsize=8)
-    vol.bar(x, sub.Volume, color=colors, width=.65)
+    # One collection instead of a Rectangle/artist for every volume bar.
+    volumes = sub.Volume.to_numpy()
+    volume_vertices = np.empty((len(sub), 4, 2))
+    volume_vertices[:, :, 0] = np.column_stack((x-.325, x-.325, x+.325, x+.325))
+    volume_vertices[:, :, 1] = np.column_stack((np.zeros(len(sub)), volumes, volumes, np.zeros(len(sub))))
+    vol.add_collection(PolyCollection(volume_vertices, facecolors=colors, edgecolors="none"))
+    vol.set_ylim(0, max(float(volumes.max())*1.08, 1))
     ticks = np.unique(np.linspace(0,len(sub)-1,min(7,len(sub))).astype(int))
     vol.set_xticks(ticks, [sub.index[i].strftime("%y-%m-%d") for i in ticks])
     for axis in (ax,vol):
+        axis.yaxis.tick_right()
+        axis.yaxis.set_label_position("right")
+        axis.tick_params(axis="y", left=False, labelleft=False, right=True, labelright=True)
         axis.grid(alpha=.2)
         axis.tick_params(labelsize=8)
         axis.ticklabel_format(axis="y", style="plain", useOffset=False)
+    # Leave room for the highlighted price instead of overlapping a regular tick.
+    minimum, maximum = ax.get_ylim()
+    ax.set_yticks([tick for tick in ax.get_yticks()
+                  if minimum <= tick <= maximum and abs(tick-latest) > (maximum-minimum)*.035])
+    ax.set_ylim(minimum, maximum)
     now = datetime.now(ZoneInfo("Asia/Seoul"))
-    fig.text(.08,.015,f"Fetched {now:%Y-%m-%d %H:%M:%S} KST | Naver daily (may be delayed) | HTS lines: {len(drawings)-skipped}, skipped: {skipped}",fontsize=7)
-    fig.subplots_adjust(left=.09,right=.97,top=.92,bottom=.10,hspace=.12)
+    fig.text(.04,.015,f"Fetched {now:%Y-%m-%d %H:%M:%S} KST | Naver daily (may be delayed) | HTS lines: {len(drawings)-skipped}, skipped: {skipped}",fontsize=7)
+    fig.subplots_adjust(left=.04,right=.86,top=.92,bottom=.10,hspace=.12)
     buf = io.BytesIO()
-    fig.savefig(buf,format="png")
+    fig.savefig(buf,format="png", pil_kwargs={"compress_level": 1})
     return buf.getvalue()

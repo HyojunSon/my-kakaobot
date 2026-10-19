@@ -1,5 +1,5 @@
 {
-  "exported_at": "2026-10-18T12:51:41.261317+00:00",
+  "exported_at": "2026-10-19T13:48:54.769426+00:00",
   "stocks": [
     {
       "code": "000650",
@@ -236,6 +236,14 @@
     {
       "code": "486990",
       "name": "노타"
+    },
+    {
+      "code": "KOSDAQ",
+      "name": "코스닥"
+    },
+    {
+      "code": "KOSPI",
+      "name": "코스피"
     }
   ],
   "drawings": {
@@ -305,10 +313,10 @@
       {
         "id": "trend_80f23335",
         "type": "trendline",
-        "start_date": "2026-02-23",
-        "start_price": 642681.9603267205,
-        "end_date": "2026-10-08",
-        "end_price": 1597058.6581096842,
+        "start_date": "2026-01-28",
+        "start_price": 1393445.865422014,
+        "end_date": "2026-10-19",
+        "end_price": 1194075.091404122,
         "color": "#D97706",
         "width": 2
       },
@@ -326,9 +334,9 @@
         "id": "trend_f308bbf2",
         "type": "trendline",
         "start_date": "2026-06-19",
-        "start_price": 3042163.8661999223,
-        "end_date": "2026-10-16",
-        "end_price": 1659441.1901983665,
+        "start_price": 3047216.7639050954,
+        "end_date": "2026-10-19",
+        "end_price": 1694811.4741345784,
         "color": "#D97706",
         "width": 2
       },
@@ -654,9 +662,29 @@
         "id": "trend_0c5ed2aa",
         "type": "trendline",
         "start_date": "2026-06-19",
-        "start_price": 6844.760793465575,
-        "end_date": "2026-10-08",
-        "end_price": 14934.760793465575,
+        "start_price": 6752.388175807077,
+        "end_date": "2026-10-19",
+        "end_price": 15904.673278879814,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_e4bea3c0",
+        "type": "trendline",
+        "start_date": "2026-06-30",
+        "start_price": 4514.498249708287,
+        "end_date": "2026-10-19",
+        "end_price": 13834.498249708287,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_418c190e",
+        "type": "trendline",
+        "start_date": "2026-05-18",
+        "start_price": 11236.058926487745,
+        "end_date": "2026-10-19",
+        "end_price": 18284.337806301046,
         "color": "#D97706",
         "width": 2
       }
@@ -1044,9 +1072,9 @@
         "id": "trend_0f45b57e",
         "type": "trendline",
         "start_date": "2026-07-22",
-        "start_price": 94838.91481913658,
-        "end_date": "2026-10-08",
-        "end_price": 222706.10073901215,
+        "start_price": 95824.25126409958,
+        "end_date": "2026-10-19",
+        "end_price": 247339.51186308835,
         "color": "#D97706",
         "width": 2
       },
@@ -1065,8 +1093,18 @@
         "type": "trendline",
         "start_date": "2026-06-15",
         "start_price": 261070.45993776742,
-        "end_date": "2026-10-08",
-        "end_price": 231459.8803967328,
+        "end_date": "2026-10-19",
+        "end_price": 229057.07992998834,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_027162ce",
+        "type": "trendline",
+        "start_date": "2026-03-24",
+        "start_price": 86012.66725009723,
+        "end_date": "2026-10-19",
+        "end_price": 104180.31602489305,
         "color": "#D97706",
         "width": 2
       }
@@ -1171,8 +1209,8 @@
         "type": "trendline",
         "start_date": "2026-05-11",
         "start_price": 426813.7320108907,
-        "end_date": "2026-09-17",
-        "end_price": 212818.38000777908,
+        "end_date": "2026-10-19",
+        "end_price": 163024.4476857254,
         "color": "#D97706",
         "width": 2
       },
@@ -1191,8 +1229,8 @@
         "type": "trendline",
         "start_date": "2026-07-20",
         "start_price": 214596.7347335667,
-        "end_date": "2026-10-08",
-        "end_price": 285730.9237650719,
+        "end_date": "2026-10-16",
+        "end_price": 292844.3426682224,
         "color": "#D97706",
         "width": 2
       },
@@ -1201,8 +1239,38 @@
         "type": "trendline",
         "start_date": "2026-08-04",
         "start_price": 176372.27148969276,
-        "end_date": "2026-10-08",
-        "end_price": 248782.27148969276,
+        "end_date": "2026-10-19",
+        "end_price": 248189.48658109686,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_46567058",
+        "type": "trendline",
+        "start_date": "2025-03-31",
+        "start_price": 56093.422792687605,
+        "end_date": "2026-10-07",
+        "end_price": 145790.2722676001,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_10f5147b",
+        "type": "trendline",
+        "start_date": "2025-08-22",
+        "start_price": 64358.61143523926,
+        "end_date": "2026-10-19",
+        "end_price": 344464.5624270712,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_c6afc04c",
+        "type": "trendline",
+        "start_date": "2025-09-22",
+        "start_price": 160151.35355892655,
+        "end_date": "2026-10-19",
+        "end_price": 145407.67405678728,
         "color": "#D97706",
         "width": 2
       }
@@ -2106,20 +2174,10 @@
       {
         "id": "trend_2d66569d",
         "type": "trendline",
-        "start_date": "2025-07-15",
-        "start_price": 7349.349066511086,
-        "end_date": "2026-10-16",
-        "end_price": 3555.9877285103084,
-        "color": "#D97706",
-        "width": 2
-      },
-      {
-        "id": "trend_f70eadc1",
-        "type": "trendline",
-        "start_date": "2026-01-21",
-        "start_price": 6969.299280435627,
-        "end_date": "2026-10-16",
-        "end_price": 2700.7473551147414,
+        "start_date": "2025-07-18",
+        "start_price": 7397.6232788798125,
+        "end_date": "2026-10-19",
+        "end_price": 3604.261940879035,
         "color": "#D97706",
         "width": 2
       },
@@ -2128,18 +2186,18 @@
         "type": "trendline",
         "start_date": "2026-06-29",
         "start_price": 2763.871295215874,
-        "end_date": "2026-10-15",
-        "end_price": 4533.925748735904,
+        "end_date": "2026-10-16",
+        "end_price": 4623.260637884096,
         "color": "#D97706",
         "width": 2
       },
       {
         "id": "trend_1de7ad53",
         "type": "trendline",
-        "start_date": "2026-07-29",
-        "start_price": 2278.98366394399,
-        "end_date": "2026-10-16",
-        "end_price": 2994.768183586153,
+        "start_date": "2026-07-27",
+        "start_price": 2281.5468689225972,
+        "end_date": "2026-10-19",
+        "end_price": 2931.2388175807073,
         "color": "#D97706",
         "width": 2
       }
@@ -2234,6 +2292,140 @@
         "start_price": 25066.9276546091,
         "end_date": "2026-10-08",
         "end_price": 18186.707895760403,
+        "color": "#D97706",
+        "width": 2
+      }
+    ],
+    "KOSDAQ": [
+      {
+        "id": "trend_35e90497",
+        "type": "trendline",
+        "start_date": "2026-04-28",
+        "start_price": 1252.9405567872425,
+        "end_date": "2026-10-19",
+        "end_price": 891.9273595877092,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_03643121",
+        "type": "trendline",
+        "start_date": "2021-07-27",
+        "start_price": 1064.8293673667833,
+        "end_date": "2026-10-19",
+        "end_price": 782.7884902761573,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_7c238e2f",
+        "type": "trendline",
+        "start_date": "2014-07-28",
+        "start_price": 512.8063257487362,
+        "end_date": "2026-10-19",
+        "end_price": 654.8722028393623,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_7300d5b9",
+        "type": "trendline",
+        "start_date": "2026-03-20",
+        "start_price": 1203.323397510696,
+        "end_date": "2026-10-01",
+        "end_price": 678.5286853364449,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_687da8c5",
+        "type": "trendline",
+        "start_date": "2026-04-29",
+        "start_price": 794.633022753792,
+        "end_date": "2026-10-19",
+        "end_price": 930.3330188642549,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_857f94bb",
+        "type": "trendline",
+        "start_date": "2026-05-07",
+        "start_price": 565.7041579152079,
+        "end_date": "2026-10-19",
+        "end_price": 703.8441579152079,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_388fe763",
+        "type": "trendline",
+        "start_date": "2022-12-14",
+        "start_price": 656.42757117853,
+        "end_date": "2026-10-19",
+        "end_price": 1050.319387592377,
+        "color": "#D97706",
+        "width": 2
+      }
+    ],
+    "KOSPI": [
+      {
+        "id": "trend_ad750ba1",
+        "type": "trendline",
+        "start_date": "2026-02-06",
+        "start_price": 4910.955274017892,
+        "end_date": "2026-10-19",
+        "end_price": 5443.33674815247,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_85a05802",
+        "type": "trendline",
+        "start_date": "2026-02-25",
+        "start_price": 7098.113443407236,
+        "end_date": "2026-10-19",
+        "end_price": 7197.549036561651,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_8fc30d64",
+        "type": "trendline",
+        "start_date": "2026-06-19",
+        "start_price": 9166.095301439127,
+        "end_date": "2026-10-19",
+        "end_price": 4924.3936231038515,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_0b3dc2b7",
+        "type": "trendline",
+        "start_date": "2026-07-08",
+        "start_price": 5739.128335278102,
+        "end_date": "2026-10-08",
+        "end_price": 6847.348335278102,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_6ab9e82d",
+        "type": "trendline",
+        "start_date": "2026-04-24",
+        "start_price": 7513.816581096851,
+        "end_date": "2026-10-19",
+        "end_price": 3727.0925320886827,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_28aabd4b",
+        "type": "trendline",
+        "start_date": "2016-05-27",
+        "start_price": 2277.716920653443,
+        "end_date": "2026-10-19",
+        "end_price": 4452.512181252431,
         "color": "#D97706",
         "width": 2
       }

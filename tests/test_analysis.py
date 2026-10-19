@@ -1,0 +1,49 @@
+import unittest
+from unittest.mock import patch
+import pandas as pd
+from fastapi.testclient import TestClient
+from api.index import app
+from api.chart_analysis import analysis_text
+
+
+class AnalysisTests(unittest.TestCase):
+    def setUp(self):
+        self.stock = {"code": "005930", "name": "삼성전자"}
+        self.df = pd.DataFrame({"Open": 100, "High": 102, "Low": 98, "Close": 100, "Volume": 1000},
+                               index=pd.bdate_range("2026-01-01", periods=30))
+
+    def test_support_resistance_price_scenario(self):
+        lines = [{"type": "horizontal", "price": 99}, {"type": "horizontal", "price": 120}]
+        text = analysis_text(self.stock, lines, self.df)
+        self.assertIn("매수 검토", text)
+        self.assertIn("120원", text)
+        self.assertIn("무효화", text)
+        self.assertLess(len(text), 950)
+
+    def test_no_lines_does_not_invent_prices(self):
+        text = analysis_text(self.stock, [], self.df)
+        self.assertIn("가격 제안 보류", text)
+        self.assertNotIn("매수 검토:", text)
+
+    def test_break_uses_previous_line_price(self):
+        d = {"type":"trendline", "start_date":str(self.df.index[-2].date()),
+             "end_date":str(self.df.index[-1].date()), "start_price":101, "end_price":99}
+        text = analysis_text(self.stock, [d], self.df)
+        self.assertIn("상향 돌파 후보", text)
+
+    def test_short_history_and_missing_anchor(self):
+        self.assertIn("부족", analysis_text(self.stock, [], self.df.iloc[:1]))
+        text = analysis_text(self.stock, [{"type":"trendline", "start_date":"2000-01-01", "end_date":"2000-02-01", "start_price":90,"end_price":100}],self.df)
+        self.assertIn("확인 불가 선 1개", text)
+
+    def test_chart_text_and_callback(self):
+        client = TestClient(app)
+        with patch("api.index.analyze_chart", return_value="지지 후보 100원"):
+            r = client.post("/api/chat", json={"userRequest":{"utterance":"/차트 삼성전자"}})
+        outputs = r.json()["template"]["outputs"]
+        self.assertIn("simpleImage", outputs[0])
+        self.assertIn("지지 후보", outputs[1]["simpleText"]["text"])
+        with patch("api.index.send_chart_analysis") as send:
+            r = client.post("/api/chat", json={"userRequest":{"utterance":"/차트 삼성전자", "callbackUrl":"https://bot-api.kakao.com/callback/test"}})
+        self.assertTrue(r.json()["useCallback"])
+        send.assert_called_once()
