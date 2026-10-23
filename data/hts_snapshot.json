@@ -1,5 +1,5 @@
 {
-  "exported_at": "2026-10-23T15:11:01.123043+00:00",
+  "exported_at": "2026-10-23T15:45:58.106749+00:00",
   "stocks": [
     {
       "code": "000650",
@@ -393,10 +393,10 @@
       {
         "id": "trend_36cc11d8",
         "type": "trendline",
-        "start_date": "2026-08-26",
-        "start_price": 14492.86075457021,
-        "end_date": "2026-10-08",
-        "end_price": 12057.542784908599,
+        "start_date": "2026-08-27",
+        "start_price": 14541.100739012061,
+        "end_date": "2026-10-23",
+        "end_price": 12491.702644885263,
         "color": "#D97706",
         "width": 2
       },
@@ -413,10 +413,30 @@
       {
         "id": "trend_d423ef7b",
         "type": "trendline",
-        "start_date": "2026-06-29",
-        "start_price": 2783.596363282768,
-        "end_date": "2026-10-08",
-        "end_price": 13621.86940879035,
+        "start_date": "2026-06-24",
+        "start_price": 7045.45458965383,
+        "end_date": "2026-10-16",
+        "end_price": 14335.949533255534,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_db361d46",
+        "type": "trendline",
+        "start_date": "2026-06-25",
+        "start_price": 2423.454395176972,
+        "end_date": "2026-10-06",
+        "end_price": 11709.97228704784,
+        "color": "#D97706",
+        "width": 2
+      },
+      {
+        "id": "trend_e2a967f8",
+        "type": "trendline",
+        "start_date": "2026-04-16",
+        "start_price": 5227.416861143522,
+        "end_date": "2026-09-29",
+        "end_price": 5690.456534422401,
         "color": "#D97706",
         "width": 2
       }
