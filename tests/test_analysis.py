@@ -12,13 +12,13 @@ class AnalysisTests(unittest.TestCase):
         for code, name in [("KOSPI", "코스피"), ("KOSDAQ", "코스닥")]:
             text = analysis_text({"code":code, "name":name}, lines, self.df)
             self.assertIn("시장 리포트", text)
-            self.assertIn("주식을 더 사고 싶으신가요?", text)
-            self.assertIn("보유 주식을 줄여야 할까요?", text)
+            self.assertIn("주식 매수:", text)
+            self.assertIn("보유 주식:", text)
             self.assertIn("99.00pt", text)
-            self.assertIn("개별 주식의 매도 가격이 아니에요", text)
+            self.assertIn("개별 주식의 매도 가격은 아니에요", text)
             self.assertNotIn(name+"을 사고", text)
             self.assertNotIn("수수료", text)
-            self.assertLess(len(text), 1900)
+            self.assertLess(len(text), 840)
 
     def test_index_without_lines_does_not_invent_levels(self):
         text = analysis_text({"code":"KOSPI", "name":"코스피"}, [], self.df)
@@ -33,10 +33,10 @@ class AnalysisTests(unittest.TestCase):
     def test_support_resistance_price_scenario(self):
         lines = [{"type": "horizontal", "price": 99}, {"type": "horizontal", "price": 120}]
         text = analysis_text(self.stock, lines, self.df)
-        self.assertIn("삼성전자를 사고 싶으신가요?", text)
+        self.assertIn("사고 싶다면", text)
         self.assertIn("120원", text)
         self.assertIn("계획을 다시 세워야 해요", text)
-        self.assertLess(len(text), 1900)
+        self.assertLess(len(text), 420)
 
     def test_no_lines_does_not_invent_prices(self):
         text = analysis_text(self.stock, [], self.df)

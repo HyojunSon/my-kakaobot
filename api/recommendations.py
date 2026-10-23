@@ -124,32 +124,23 @@ def scan_recommendations(snapshot):
 
 
 def recommendation_text(scan):
-    lines = ["🔎 이런 종목을 살펴보세요", "━" * 16,
-             "과거에 가격이 내려오다 멈추고 다시 오른 차트 선을 찾아봤어요.",
-             "그런 움직임이 2번 이상 있었고, 최근에는 크게 깨지지 않은 선이에요.",
-             "지금 가격이 그 선보다 1% 이내로 조금 위에 있는 종목을 모았어요.", ""]
+    lines = ["🔎 지금 살펴볼 종목"]
     if scan["dates"]:
-        lines.append("📅 가격 확인 날짜  " + " ~ ".join(dict.fromkeys([scan["dates"][0], scan["dates"][-1]])))
+        lines.append("📅 " + " ~ ".join(dict.fromkeys([scan["dates"][0], scan["dates"][-1]])))
     if scan["results"]:
-        lines.extend(["", f"🌱 살펴볼 종목 {len(scan['results'])}개", "그 선에 가까운 순서예요. 더 잘 오를 순서는 아니에요.", ""])
+        lines.append(f"🌱 총 {len(scan['results'])}종목")
         for i, r in enumerate(scan["results"], 1):
-            lines.append(f"{i:02d}  {r['name']}  ·  {r['code']}")
-            detail = f"    ↳ 가격을 받쳐줄지 볼 선보다 {r['gap']:.2f}% 위"
-            if 'support_tests' in r:
-                detail += f"\n    ↳ 선 근처에서 멈췄다가 다시 오른 기록 {r['support_tests']}번"
-            lines.extend([detail, ""])
+            lines.append(f"• {r['name']} ({r['code']})")
     elif scan["total"] == 0:
-        lines.extend(["", "📂 분석에 사용할 차트 선이 아직 없어요.", "HTS에서 그린 선을 동기화해 주세요."])
+        lines.append("📂 아직 분석할 종목이 없어요.")
     elif scan["failed"] == scan["total"]:
         lines.extend(["", "📡 현재 가격을 불러오지 못했어요.", "잠시 후 다시 요청해 주세요."])
     else:
-        lines.extend(["", "🌿 확인한 종목 중 지금 조건에 맞는 종목은 없어요.", "과거에 가격을 받쳐준 선 가까이 내려온 종목이 있는지 다음에 다시 살펴보세요."])
+        lines.append("🌿 지금은 추천할 종목이 없어요. 잠시 후 다시 확인해 주세요.")
     if scan["results"]:
-        lines.extend(["💡 목록에 있다고 바로 사지는 마세요.",
-                      "가격이 그 선 근처에서 멈추고 다시 오르는지 먼저 확인하세요.",
-                      "아래 종목 버튼을 누르면 차트와 설명을 볼 수 있어요.", ""])
-    lines.extend(["━" * 16, f"📊 살펴본 종목 {scan['total']}개 · 가격을 못 불러온 종목 {scan['failed']}개",
-                  f"계산할 수 없는 선 {scan['skipped']}개는 제외했어요.",
-                  f"🕒 조회 {scan['checked_at']} KST · 제공처 최신 일봉 가격 기준",
-                  "※ 장이 열려 있으면 가격은 바뀌어요. 선 아래로 더 떨어지거나 손실이 날 수도 있어요."])
+        lines.append("📈 아래 종목 버튼으로 차트와 분석을 확인하세요.")
+    if scan["failed"]:
+        lines.append(f"일부 종목({scan['failed']}개)은 시세를 확인하지 못했어요.")
+    lines.extend([f"🕒 {scan['checked_at']} KST",
+                  "※ 매수 확정 신호는 아니며 손실이 날 수 있어요."])
     return "\n".join(lines)

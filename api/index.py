@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 from api.chart_service import load_snapshot, resolve_stock, render_chart
 from api.chart_analysis import analyze_chart
+from api.message_layout import short_bubbles
 
 app = FastAPI()
 logger = logging.getLogger(__name__)
@@ -28,32 +29,31 @@ def text_response(text):
     return {"version": "2.0", "template": {"outputs": [{"simpleText": {"text": text}}]}}
 
 
-def recommendation_response(scan):
+def recommendation_response(scan, page=1):
     from api.recommendations import recommendation_text
-    chunks = []
-    for line in recommendation_text(scan).splitlines():
-        if not chunks or len(chunks[-1]) + len(line) + 1 > 950:
-            chunks.append(line)
-        else:
-            chunks[-1] += "\n" + line
-    if len(chunks) > 3:
-        chunks[2] += "\n일부 결과는 메시지 길이 제한으로 생략되었습니다."
+    chunks = short_bubbles(recommendation_text(scan))
+    pages = max(1, (len(chunks)+2)//3)
+    page = min(max(page, 1), pages)
+    selected = chunks[(page-1)*3:page*3]
     result = {"version": "2.0", "template": {"outputs": [
-        {"simpleText": {"text": chunk}} for chunk in chunks[:3]
+        {"simpleText": {"text": chunk}} for chunk in selected
     ]}}
     if scan["results"]:
         result["template"]["quickReplies"] = [
             {"label": ("📈 " + stock["name"])[:20], "action": "message", "messageText": "/차트 " + stock["code"]}
             for stock in scan["results"][:8]
         ]
+    if page < pages:
+        result["template"].setdefault("quickReplies", []).append({
+            "label": "추천 이어보기", "action": "message", "messageText": f"/종목추천 {page+1}"})
     return result
 
 
-def send_recommendations(callback_url, snapshot):
+def send_recommendations(callback_url, snapshot, page=1):
     import requests
     from api.recommendations import scan_recommendations
     try:
-        response = recommendation_response(scan_recommendations(snapshot))
+        response = recommendation_response(scan_recommendations(snapshot), page)
     except Exception:
         logger.exception("Recommendation background scan failed")
         response = text_response("종목추천 데이터를 조회하지 못했습니다. 잠시 후 다시 요청해 주세요.")
@@ -88,12 +88,7 @@ def chart_response(stock, snapshot, image_url):
     except Exception:
         logger.exception("Rule analysis failed for %s", stock["code"])
         text = "분석용 시세를 조회하지 못했습니다. 가격 제안은 보류합니다."
-    chunks = []
-    for line in text.splitlines():
-        if not chunks or len(chunks[-1])+len(line)+1 > 950:
-            chunks.append(line)
-        else:
-            chunks[-1] += "\n" + line
+    chunks = short_bubbles(text, max_chars=420, max_rows=16)
     return {"version": "2.0", "template": {"outputs": [
         {"simpleImage": {"imageUrl": image_url, "altText": f"{stock['name']} 최근 6개월 차트"}},
         *[{"simpleText": {"text": chunk}} for chunk in chunks[:2]]
@@ -116,7 +111,9 @@ async def chat_handler(request: Request, background_tasks: BackgroundTasks):
             raise ValueError()
     except (ValueError, KeyError, TypeError):
         return text_response("명령을 읽지 못했습니다. /차트 삼성전자 형식으로 입력해 주세요.")
-    if utterance.strip() == "/종목추천":
+    recommendation_match = re.fullmatch(r"/종목추천(?:\s+([1-9]\d{0,2}))?", utterance.strip())
+    if recommendation_match:
+        page = int(recommendation_match.group(1) or 1)
         from api.recommendations import scan_recommendations
         try:
             snapshot = load_snapshot()
@@ -124,10 +121,10 @@ async def chat_handler(request: Request, background_tasks: BackgroundTasks):
             if isinstance(callback_url, str) and callback_url:
                 if not valid_callback(callback_url):
                     return text_response("카카오 콜백 주소를 확인할 수 없습니다.")
-                background_tasks.add_task(send_recommendations, callback_url, snapshot)
+                background_tasks.add_task(send_recommendations, callback_url, snapshot, page)
                 return {"version": "2.0", "useCallback": True}
             scan = await run_in_threadpool(scan_recommendations, snapshot)
-            return recommendation_response(scan)
+            return recommendation_response(scan, page)
         except Exception:
             logger.exception("Recommendation scan failed")
             return text_response("종목추천 데이터를 조회하지 못했습니다. 잠시 후 다시 요청해 주세요.")
