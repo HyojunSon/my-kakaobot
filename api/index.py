@@ -38,9 +38,15 @@ def recommendation_response(scan):
             chunks[-1] += "\n" + line
     if len(chunks) > 3:
         chunks[2] += "\n일부 결과는 메시지 길이 제한으로 생략되었습니다."
-    return {"version": "2.0", "template": {"outputs": [
+    result = {"version": "2.0", "template": {"outputs": [
         {"simpleText": {"text": chunk}} for chunk in chunks[:3]
     ]}}
+    if scan["results"]:
+        result["template"]["quickReplies"] = [
+            {"label": ("📈 " + stock["name"])[:20], "action": "message", "messageText": "/차트 " + stock["code"]}
+            for stock in scan["results"][:8]
+        ]
+    return result
 
 
 def send_recommendations(callback_url, snapshot):

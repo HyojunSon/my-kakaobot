@@ -7,6 +7,24 @@ from api.chart_analysis import analysis_text
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_indices_give_market_exposure_guidance(self):
+        lines = [{"type": "horizontal", "price": 99}, {"type": "horizontal", "price": 120}]
+        for code, name in [("KOSPI", "코스피"), ("KOSDAQ", "코스닥")]:
+            text = analysis_text({"code":code, "name":name}, lines, self.df)
+            self.assertIn("시장 리포트", text)
+            self.assertIn("주식을 더 사고 싶으신가요?", text)
+            self.assertIn("보유 주식을 줄여야 할까요?", text)
+            self.assertIn("99.00pt", text)
+            self.assertIn("개별 주식의 매도 가격이 아니에요", text)
+            self.assertNotIn(name+"을 사고", text)
+            self.assertNotIn("수수료", text)
+            self.assertLess(len(text), 1900)
+
+    def test_index_without_lines_does_not_invent_levels(self):
+        text = analysis_text({"code":"KOSPI", "name":"코스피"}, [], self.df)
+        self.assertIn("선이 부족해요", text)
+        self.assertNotIn("아래에서 장을 마치면", text)
+
     def setUp(self):
         self.stock = {"code": "005930", "name": "삼성전자"}
         self.df = pd.DataFrame({"Open": 100, "High": 102, "Low": 98, "Close": 100, "Volume": 1000},
@@ -15,26 +33,26 @@ class AnalysisTests(unittest.TestCase):
     def test_support_resistance_price_scenario(self):
         lines = [{"type": "horizontal", "price": 99}, {"type": "horizontal", "price": 120}]
         text = analysis_text(self.stock, lines, self.df)
-        self.assertIn("매수 검토", text)
+        self.assertIn("삼성전자를 사고 싶으신가요?", text)
         self.assertIn("120원", text)
-        self.assertIn("무효화", text)
-        self.assertLess(len(text), 950)
+        self.assertIn("계획을 다시 세워야 해요", text)
+        self.assertLess(len(text), 1900)
 
     def test_no_lines_does_not_invent_prices(self):
         text = analysis_text(self.stock, [], self.df)
-        self.assertIn("가격 제안 보류", text)
-        self.assertNotIn("매수 검토:", text)
+        self.assertIn("제안하기 어려워요", text)
+        self.assertNotIn("사고 싶으신가요?", text)
 
     def test_break_uses_previous_line_price(self):
         d = {"type":"trendline", "start_date":str(self.df.index[-2].date()),
              "end_date":str(self.df.index[-1].date()), "start_price":101, "end_price":99}
         text = analysis_text(self.stock, [d], self.df)
-        self.assertIn("상향 돌파 후보", text)
+        self.assertIn("가격이 선 위로 올라왔어요", text)
 
     def test_short_history_and_missing_anchor(self):
         self.assertIn("부족", analysis_text(self.stock, [], self.df.iloc[:1]))
         text = analysis_text(self.stock, [{"type":"trendline", "start_date":"2000-01-01", "end_date":"2000-02-01", "start_price":90,"end_price":100}],self.df)
-        self.assertIn("확인 불가 선 1개", text)
+        self.assertIn("선 1개는 제외했어요", text)
 
     def test_chart_text_and_callback(self):
         client = TestClient(app)
