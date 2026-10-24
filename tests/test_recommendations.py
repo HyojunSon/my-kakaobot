@@ -25,15 +25,47 @@ class RecommendationTests(unittest.TestCase):
             self.df.loc[self.df.index[-1], "Close"] = 101.01
             self.assertIsNone(check_symbol(self.stock, [self.line])[0])
             self.df.loc[self.df.index[-1], "Close"] = 99
+            result = check_symbol(self.stock, [self.line])[0]
+            self.assertAlmostEqual(result["gap"], -1)
+            self.assertEqual(result["position"], "below")
+            self.df.loc[self.df.index[-1], "Close"] = 98.99
             self.assertIsNone(check_symbol(self.stock, [self.line])[0])
 
-    def test_resistance_and_recent_break_are_excluded(self):
+    def test_below_support_can_pass_but_recent_break_is_excluded(self):
         with patch("api.recommendations.fetch_candles", return_value=self.df):
             self.df.loc[self.df.index[-1], "Close"] = 99.9
-            self.assertIsNone(check_symbol(self.stock, [self.line])[0])
+            self.assertEqual(check_symbol(self.stock, [self.line])[0]["position"], "below")
             self.df.loc[self.df.index[-1], "Close"] = 100.5
             self.df.loc[self.df.index[-2], "Close"] = 99
             self.assertIsNone(check_symbol(self.stock, [self.line])[0])
+
+    def test_return_uses_support_entry_not_current_price(self):
+        from api.recommendations import recommendation_text
+        resistance = {"type":"horizontal", "price":120}
+        with patch("api.recommendations.fetch_candles", return_value=self.df):
+            result = check_symbol(self.stock, [self.line, resistance])[0]
+            self.assertEqual(result["support_price"], 100)
+            self.assertEqual(result["resistance_price"], 120)
+            self.assertAlmostEqual(result["expected_return_pct"], 20)
+            scan = {"results":[result], "dates":[], "total":1,"failed":0,"skipped":0,"checked_at":"test"}
+            self.assertIn("지지선 위", recommendation_text(scan))
+            self.df.loc[self.df.index[-1], "Close"] = 99.5
+            scan["results"] = [check_symbol(self.stock, [self.line, resistance])[0]]
+            self.assertIn("지지선 아래", recommendation_text(scan))
+
+    def test_no_upper_line_does_not_invent_return(self):
+        with patch("api.recommendations.fetch_candles", return_value=self.df):
+            result = check_symbol(self.stock, [self.line])[0]
+        self.assertIsNone(result["expected_return_pct"])
+        self.assertIsNone(result["resistance_price"])
+
+    def test_nearest_support_is_by_absolute_distance(self):
+        higher = {**self.line, "start_price":100.5, "end_price":100.5}
+        self.df.loc[self.df.index[-1], "Close"] = 100.1
+        with patch("api.recommendations.fetch_candles", return_value=self.df), \
+             patch("api.recommendations.support_evidence", return_value={"support_tests":2,"held_ratio":1}):
+            result = check_symbol(self.stock, [higher, self.line])[0]
+        self.assertEqual(result["support_price"], 100)
 
     def test_nearby_line_without_bounce_history_is_excluded(self):
         self.df["Low"] = 101

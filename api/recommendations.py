@@ -70,6 +70,9 @@ def check_symbol(stock, drawings, threshold=1.0):
         raise ValueError("Invalid close")
     nearest = None
     evidence = None
+    selected_price = None
+    selected_id = None
+    levels = []
     skipped = 0
     for drawing in drawings:
         try:
@@ -77,18 +80,30 @@ def check_symbol(stock, drawings, threshold=1.0):
             if values is None or not math.isfinite(values[1]) or values[1] <= 0:
                 skipped += 1
                 continue
+            levels.append((drawing.get("id"), values[1]))
+            if drawing.get("type") != "trendline":
+                continue
             gap = (close-values[1])/values[1]*100
-            # A line above the current price is not an intact support.
-            if not (0 <= gap <= threshold + 1e-9):
+            # Historical support can be slightly below OR above the latest
+            # price. Below-support candidates explicitly require recovery.
+            if abs(gap) > threshold + 1e-9:
                 continue
             support = support_evidence(drawing, df, dates)
-            if support is not None and (nearest is None or gap < nearest):
+            if support is not None and (nearest is None or abs(gap) < abs(nearest)):
                 nearest = gap
                 evidence = support
+                selected_price = values[1]
+                selected_id = drawing.get("id")
         except (KeyError, ValueError, TypeError, OverflowError):
             skipped += 1
+    resistance = min((price for _, price in levels if selected_price is not None
+                      and price > max(selected_price, close)), default=None)
     result = None if nearest is None else {
         "code": stock["code"], "name": stock["name"], "gap": nearest,
+        "current_price": close, "support_price": selected_price, "support_line_id": selected_id,
+        "position": "below" if nearest < -1e-9 else ("above" if nearest > 1e-9 else "on"),
+        "resistance_price": resistance,
+        "expected_return_pct": (resistance/selected_price-1)*100 if resistance is not None else None,
         "date": df.index[-1].strftime("%Y-%m-%d"), **evidence}
     return result, skipped, df.index[-1].strftime("%Y-%m-%d")
 
@@ -96,10 +111,10 @@ def check_symbol(stock, drawings, threshold=1.0):
 def scan_recommendations(snapshot):
     started = perf_counter()
     stocks = {s["code"]: s for s in snapshot["stocks"]}
-    targets = {code: [d for d in drawings if d.get("type") == "trendline"]
+    targets = {code: drawings
                for code, drawings in snapshot.get("drawings", {}).items()
-               if code not in {"KOSPI", "KOSDAQ"} and code in stocks}
-    targets = {code: drawings for code, drawings in targets.items() if drawings}
+               if code not in {"KOSPI", "KOSDAQ"} and code in stocks
+               and any(d.get("type") == "trendline" for d in drawings)}
     results, failed, skipped, dates = [], 0, 0, set()
     # No GUI, indicators or rendering. Fetch independent symbols concurrently.
     with ThreadPoolExecutor(max_workers=12) as pool:
@@ -131,6 +146,13 @@ def recommendation_text(scan):
         lines.append(f"🌱 총 {len(scan['results'])}종목")
         for i, r in enumerate(scan["results"], 1):
             lines.append(f"• {r['name']} ({r['code']})")
+            if "position" in r:
+                lines.append("  🟠 지지선 아래: 다시 선 위로 회복하는지 확인하세요."
+                             if r["position"] == "below" else "  🟢 지지선 위·접촉: 가격이 버티는지 확인하세요.")
+                if r["resistance_price"] is not None:
+                    lines.append(f"  지지 {r['support_price']:,.0f}원 → 저항 {r['resistance_price']:,.0f}원 · 예상 +{r['expected_return_pct']:.1f}%")
+                else:
+                    lines.append(f"  지지 {r['support_price']:,.0f}원 · 위쪽 저항선 없어 수익률 계산 보류")
     elif scan["total"] == 0:
         lines.append("📂 아직 분석할 종목이 없어요.")
     elif scan["failed"] == scan["total"]:
@@ -142,5 +164,5 @@ def recommendation_text(scan):
     if scan["failed"]:
         lines.append(f"일부 종목({scan['failed']}개)은 시세를 확인하지 못했어요.")
     lines.extend([f"🕒 {scan['checked_at']} KST",
-                  "※ 매수 확정 신호는 아니며 손실이 날 수 있어요."])
+                  "※ 수익률은 현재 선 가격 간 단순 계산(비용 제외)이며 보장 수익이 아니에요."])
     return "\n".join(lines)
