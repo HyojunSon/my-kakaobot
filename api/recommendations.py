@@ -12,55 +12,91 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def support_evidence(drawing, df, dates):
-    """Conservative heuristic: held from above and rebounded on separate visits.
+# Policy parameters are heuristics, not fitted profitability claims.
+ROLE_LOOKBACK = 60
+SUPPORT_FRESHNESS = 30
+TOUCH_TOLERANCE = .005
+BOUNCE_CLEARANCE = .005
+BREAK_CLEARANCE = .01
 
-    Excludes the latest (possibly incomplete) candle from historical evidence.
-    Uses session-specific line prices, never a constant level for a sloped line.
+
+def support_evidence(drawing, df, dates):
+    """Track recent support visits; a confirmed break resets old evidence.
+
+    Never use the latest, possibly incomplete candle as confirmation. An
+    approach from above is eligible for observation before a bounce confirms.
+    Each price is compared with its own session's projected line value.
     """
     if drawing.get("type") != "trendline":
         return None
     anchors = [dates.get(drawing.get(k)) for k in ("start_date", "end_date")]
     if any(x is None for x in anchors):
         return None
-    start = max(0, len(df)-61, min(anchors)+1)
+    # This is current screening of a user-drawn line, not a historical
+    # backtest. Its second anchor is not the start of its support role.
+    start = max(0, len(df)-ROLE_LOOKBACK-1, min(anchors)+1)
     stop = len(df)-1
-    if stop-start < 20:
+    if stop-start < 10:
         return None
     first, final = line_values(drawing, dates, start, stop-1)
     step = (final-first)/(stop-1-start)
     prices = [first+step*i for i in range(stop-start)]
-    if any(not math.isfinite(p) or p <= 0 for p in prices):
-        return None
     closes = [float(x) for x in df.Close.iloc[start:stop]]
     lows = [float(x) for x in df.Low.iloc[start:stop]]
-    if any(not math.isfinite(v) for v in closes+lows):
+    if any(not math.isfinite(p) or p <= 0 for p in prices) or any(
+            not math.isfinite(v) for v in closes+lows):
         return None
-    held = sum(c >= p*.998 for c,p in zip(closes, prices))/len(prices)
-    if held < .8 or any(c < p*.995 for c,p in zip(closes[-3:], prices[-3:])):
-        return None
-    touches = 0
-    last_touch = -4
-    for i in range(len(prices)-1):
-        if i-last_touch < 3:
+    gaps = [c/p-1 for c,p in zip(closes, prices)]
+    visits = []
+    pending = None
+    last_confirmation = -4
+    reset = -1
+    for i, gap in enumerate(gaps):
+        # A single >=1% close below, or two consecutive >=0.5% closes
+        # below, invalidates all earlier support visits. A later retest can
+        # establish a new role; being below the line long ago is irrelevant.
+        broken = gap <= -BREAK_CLEARANCE+1e-9 or (
+            i > 0 and gap <= -TOUCH_TOLERANCE+1e-9
+            and gaps[i-1] <= -TOUCH_TOLERANCE+1e-9)
+        if broken:
+            visits.clear()
+            pending = None
+            reset = i
             continue
-        # A low visits the line, the candle recovers above it, then a later
-        # candle closes >=0.5% above its own line without an intervening break.
-        if abs(lows[i]/prices[i]-1) <= .005 and closes[i] >= prices[i]:
-            for j in range(i+1, min(i+4, len(prices))):
-                if closes[j] < prices[j]*.995:
-                    break
-                if closes[j] >= prices[j]*1.005:
-                    touches += 1
-                    last_touch = j  # Do not count one prolonged visit twice.
-                    break
-    if touches < 2:
-        return None
-    return {"support_tests": touches, "held_ratio": held}
+        if pending is not None:
+            if gap < -TOUCH_TOLERANCE or i-pending > 3:
+                pending = None
+            elif gap >= BOUNCE_CLEARANCE-1e-9:
+                visits.append((pending, i))
+                last_confirmation = i
+                pending = None
+        # The approach must come from above: at least two of the prior
+        # three closes above the line, after the most recent confirmed break.
+        prior = gaps[max(reset+1, i-3):i]
+        from_above = sum(g >= .002-1e-9 for g in prior) >= 2
+        if (pending is None and i-last_confirmation >= 3 and from_above
+                and abs(lows[i]/prices[i]-1) <= TOUCH_TOLERANCE+1e-9
+                and gap >= 0):
+            pending = i
+    recent = [(touch, confirm) for touch, confirm in visits
+              if len(prices)-1-confirm < SUPPORT_FRESHNESS]
+    if recent:
+        return {"support_tests": len(visits), "support_status": "confirmed",
+                "last_support_date": df.index[start+recent[-1][1]].strftime("%Y-%m-%d"),
+                "support_age_sessions": len(prices)-1-recent[-1][1]}
+    # Do not wait for a rebound to finish before flagging a nearby support
+    # candidate. Require a recent approach from above after any failed role.
+    approach = gaps[max(reset+1, len(gaps)-3):]
+    if (len(approach) >= 2 and sum(g >= .002-1e-9 for g in approach) >= 2
+            and gaps[-1] >= -.002-1e-9):
+        return {"support_tests": 0, "support_status": "awaiting_confirmation",
+                "last_support_date": None, "support_age_sessions": None}
+    return None
 
 
-def check_symbol(stock, drawings, threshold=1.0):
-    df = fetch_candles(stock["code"], count=history_count(drawings))
+def check_symbol(stock, drawings, threshold=1.0, df=None):
+    if df is None:
+        df = fetch_candles(stock["code"], count=history_count(drawings))
     if df.empty:
         raise ValueError("Empty candles")
     dates = {date.strftime("%Y-%m-%d"): i for i, date in enumerate(df.index)}
@@ -146,8 +182,10 @@ def recommendation_text(scan):
         lines.append(f"🌱 총 {len(scan['results'])}종목")
         for i, r in enumerate(scan["results"], 1):
             lines.append(f"• {r['name']} ({r['code']})")
+            if r.get("support_status") == "awaiting_confirmation":
+                lines.append("  🔎 지지선에 접근 중 · 반등 확인 전 관심 후보예요.")
             if "position" in r:
-                lines.append("  🟠 지지선 아래: 다시 선 위로 회복하는지 확인하세요."
+                lines.append("  🟠 지지선 소폭 이탈 · 회복하며 올라올 때 지지선 부근 매수를 살펴보세요."
                              if r["position"] == "below" else "  🟢 지지선 위·접촉: 가격이 버티는지 확인하세요.")
                 if r["resistance_price"] is not None:
                     lines.append(f"  지지 {r['support_price']:,.0f}원 → 저항 {r['resistance_price']:,.0f}원 · 예상 +{r['expected_return_pct']:.1f}%")
@@ -160,6 +198,7 @@ def recommendation_text(scan):
     else:
         lines.append("🌿 지금은 추천할 종목이 없어요. 잠시 후 다시 확인해 주세요.")
     if scan["results"]:
+        lines.append("💰 지지선 위 안착 후, 저항선에서 나누어 수익실현할지 살펴보세요.")
         lines.append("📈 아래 종목 버튼으로 차트와 분석을 확인하세요.")
     if scan["failed"]:
         lines.append(f"일부 종목({scan['failed']}개)은 시세를 확인하지 못했어요.")

@@ -103,15 +103,38 @@ def analysis_text(stock, drawings, df):
     resistances = sorted({v for v,e in levels if v > close})
     if index:
         return index_market_guide(lines, df, supports, resistances, levels, skipped)
+    # Share the screener's historical support identity, even just below it.
+    from api.recommendations import check_symbol
+    candidate, _, _ = check_symbol(stock, drawings, df=df)
+    recovery = candidate is not None and candidate["position"] == "below"
+    if candidate is not None and candidate.get("support_status") == "awaiting_confirmation":
+        lines.append("🔎 지지선 접근 후보 · 반등은 아직 확인되지 않았어요.")
+    if candidate is not None:
+        support = candidate["support_price"]
+        supports = [support]
+        resistances = sorted({v for v, _ in levels if v > max(support, close)})
+    if recovery:
+        lines.append("🟠 지지선 소폭 이탈 · 다시 회복하는지 확인하세요.")
     if levels:
         nearest = min(levels, key=lambda item: abs(close-item[0]))
-        if nearest[1]:
+        if nearest[1] and not recovery:
             lines.append(nearest[1])
         lines.append("🟢 지지선: " + (price(supports[0]) if supports else "확인할 선 없음"))
         lines.append("🔴 저항선: " + (price(resistances[0]) if resistances else "확인할 선 없음"))
     else:
         lines.append("📂 참고할 수 있는 차트 선이 없어요.")
-    if supports and len(df) >= 15:
+    if recovery:
+        support = candidate["support_price"]
+        summary = "🟠 지지선 회복을 확인하고 매수를 살펴보세요"
+        lines.append(f"🛒 {price(support)} 부근까지 회복하며 올라올 때 매수를 살펴보세요. 선 아래에서 미리 사기보다 위에 안착하는지 확인하세요.")
+        if resistances:
+            target = resistances[0]
+            lines.append(f"💰 안착 후 {price(target)} 부근에서 나누어 수익실현할지 살펴보세요.")
+            lines.append(f"📈 지지선 매수 → 저항선 매도 예상 +{(target/support-1)*100:.1f}% (비용 제외·보장 아님)")
+        else:
+            lines.append("위쪽 저항선이 없어 매도 목표와 예상 수익률은 계산을 보류해요.")
+        lines.append("🚨 회복하지 못하거나 다시 밀리면 매수 계획을 재검토하세요.")
+    elif supports and len(df) >= 15:
         prev_close = df.Close.shift(1)
         tr = pd.concat([df.High-df.Low, (df.High-prev_close).abs(), (df.Low-prev_close).abs()], axis=1).max(axis=1)
         atr = float(tr.iloc[-14:].mean())

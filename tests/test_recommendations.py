@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pandas as pd
 from fastapi.testclient import TestClient
 from api.index import app
-from api.recommendations import check_symbol, scan_recommendations
+from api.recommendations import check_symbol, scan_recommendations, support_evidence
 
 
 class RecommendationTests(unittest.TestCase):
@@ -51,7 +51,7 @@ class RecommendationTests(unittest.TestCase):
             self.assertIn("지지선 위", recommendation_text(scan))
             self.df.loc[self.df.index[-1], "Close"] = 99.5
             scan["results"] = [check_symbol(self.stock, [self.line, resistance])[0]]
-            self.assertIn("지지선 아래", recommendation_text(scan))
+        self.assertIn("지지선 소폭 이탈", recommendation_text(scan))
 
     def test_no_upper_line_does_not_invent_return(self):
         with patch("api.recommendations.fetch_candles", return_value=self.df):
@@ -67,16 +67,73 @@ class RecommendationTests(unittest.TestCase):
             result = check_symbol(self.stock, [higher, self.line])[0]
         self.assertEqual(result["support_price"], 100)
 
-    def test_nearby_line_without_bounce_history_is_excluded(self):
+    def test_approach_without_bounce_is_waiting_candidate(self):
         self.df["Low"] = 101
         with patch("api.recommendations.fetch_candles", return_value=self.df):
-            self.assertIsNone(check_symbol(self.stock, [self.line])[0])
+            result = check_symbol(self.stock, [self.line])[0]
+            self.assertEqual(result["support_status"], "awaiting_confirmation")
+            self.assertEqual(result["support_tests"], 0)
 
     def test_prolonged_touch_counts_as_one_visit(self):
         self.df["Low"] = 101
-        self.df.iloc[10:14] = [100.3, 100]
+        self.df.iloc[10:13] = [100.3, 100]
         with patch("api.recommendations.fetch_candles", return_value=self.df):
-            self.assertIsNone(check_symbol(self.stock, [self.line])[0])
+            self.assertEqual(check_symbol(self.stock, [self.line])[0]["support_tests"], 1)
+
+    def test_former_resistance_can_become_support(self):
+        self.df.iloc[:28] = [95, 94]
+        self.df.iloc[28:] = [102, 101]
+        self.df.iloc[33] = [100.3, 100]
+        self.df.iloc[-1] = [99.5, 99]
+        result = check_symbol(self.stock, [self.line], df=self.df)[0]
+        self.assertIsNotNone(result)
+        self.assertEqual(result["support_tests"], 1)
+        self.assertEqual(result["position"], "below")
+
+    def test_breakout_without_retest_is_not_confirmed_support(self):
+        self.df.iloc[:28] = [95, 94]
+        self.df.iloc[28:] = [102, 101]
+        self.df.iloc[-1] = [100.5, 100]
+        self.assertEqual(check_symbol(self.stock, [self.line], df=self.df)[0]["support_status"],
+                         "awaiting_confirmation")
+
+    def test_two_small_closing_breaks_reset_old_support(self):
+        self.df.iloc[-4:-2] = [99.4, 99]
+        self.df.iloc[-2] = [102, 101]
+        self.assertIsNone(check_symbol(self.stock, [self.line], df=self.df)[0])
+
+    def test_new_retest_after_break_reestablishes_support(self):
+        self.df.iloc[25] = [98, 97]
+        self.df.iloc[31] = [100.3, 100]
+        result = check_symbol(self.stock, [self.line], df=self.df)[0]
+        self.assertIsNotNone(result)
+        self.assertEqual(result["support_tests"], 1)
+
+    def test_old_bounce_expires(self):
+        self.df = pd.DataFrame({"Close": 102.0, "Low": 101.0},
+                               index=pd.bdate_range("2026-08-01", periods=80))
+        self.df.iloc[25] = [100.3, 100]
+        self.df.iloc[-4:-1] = [99.8, 99.6]
+        self.df.iloc[-1] = [100.5, 100]
+        self.assertIsNone(check_symbol(self.stock, [self.line], df=self.df)[0])
+
+    def test_latest_bar_cannot_confirm_bounce(self):
+        self.df["Low"] = 101
+        self.df.iloc[-2] = [100.3, 100]
+        self.df.iloc[-1] = [101, 100]
+        result = check_symbol(self.stock, [self.line], df=self.df)[0]
+        self.assertEqual(result["support_status"], "awaiting_confirmation")
+        self.assertEqual(result["support_tests"], 0)
+
+    def test_recent_second_anchor_does_not_block_current_screening(self):
+        self.line["end_date"] = str(self.df.index[-2].date())
+        result = check_symbol(self.stock, [self.line], df=self.df)[0]
+        self.assertIsNotNone(result)
+
+    def test_approach_from_below_is_not_support_candidate(self):
+        self.df.iloc[:] = [99.8, 99.6]
+        self.df.iloc[-1] = [99.9, 99.5]
+        self.assertIsNone(check_symbol(self.stock, [self.line], df=self.df)[0])
 
     def test_short_history_cannot_establish_support(self):
         with patch("api.recommendations.fetch_candles", return_value=self.df.iloc[:10]):

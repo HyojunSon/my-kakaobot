@@ -38,6 +38,22 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn("계획을 다시 세워야 해요", text)
         self.assertLess(len(text), 420)
 
+    def test_recommended_support_below_price_is_not_relabeled_resistance(self):
+        dates = self.df.index
+        drawing = {"type": "trendline", "id": "support",
+                   "start_date": str(dates[0].date()), "end_date": str(dates[10].date()),
+                   "start_price": 100, "end_price": 100}
+        df = self.df.copy()
+        df["Close"] = 101.0
+        df["Low"] = 100
+        df.loc[dates[-1], "Close"] = 99.5
+        text = analysis_text(self.stock, [drawing, {"type": "horizontal", "price": 120}], df)
+        self.assertIn("🟢 지지선: 100원", text)
+        self.assertIn("🔴 저항선: 120원", text)
+        self.assertIn("회복", text)
+        self.assertIn("+20.0%", text)
+        self.assertNotIn("🟢 지지선: 확인할 선 없음", text)
+
     def test_no_lines_does_not_invent_prices(self):
         text = analysis_text(self.stock, [], self.df)
         self.assertIn("제안하기 어려워요", text)
