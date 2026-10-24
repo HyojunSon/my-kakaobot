@@ -1,6 +1,9 @@
 """Deterministic scenarios from user drawings; no model or external AI."""
 import math
 from api.chart_service import chart_data, line_values
+from api.message_layout import readable_analysis, OPINION_HEADING
+from api.line_context import line_context, CONVERGENCE_NOTE
+from api.chart_patterns import detect_pattern, pattern_messages
 
 
 def analyze_chart(stock, snapshot):
@@ -8,7 +11,7 @@ def analyze_chart(stock, snapshot):
     return analysis_text(stock, drawings, df)
 
 
-def index_market_guide(lines, df, supports, resistances, levels, skipped):
+def index_market_guide(lines, df, supports, resistances, levels, skipped, context=None):
     """Index levels guide stock exposure, never orders for the index itself."""
     import pandas as pd
     close = float(df.Close.iloc[-1])
@@ -17,6 +20,7 @@ def index_market_guide(lines, df, supports, resistances, levels, skipped):
     lines = [line.replace("차트 리포트", "시장 리포트").replace("최신 가격", "현재 지수") for line in lines]
     lines[0] = lines[0].replace("📋 ", "📋 시장 리포트 · ", 1)
     lines[1] = lines[1].replace("💰 ", "💰 지수 ", 1)
+    lines[1] = lines[1].replace("현재가", "현재 지수")
     summary = "🔎 시장 회복 확인 후 주식 매수를 살펴보세요"
     support = supports[0] if supports else None
     resistance = resistances[0] if resistances else None
@@ -29,9 +33,24 @@ def index_market_guide(lines, df, supports, resistances, levels, skipped):
         summary = "🟢 시장이 버티는지 먼저 확인하세요"
     if event:
         lines.append(event.replace("가격", "지수"))
-    lines.append("🟢 지지선: " + (point(support) if support is not None else "그려둔 선에서 찾지 못했어요"))
+    if context and context["zone_count"] >= 2:
+        lines.append(f"선 밀집 구간: {point(context['zone_low'])}~{point(context['zone_high'])}")
+    else:
+        lines.append("🟢 지지선: " + (point(support) if support is not None else "그려둔 선에서 찾지 못했어요"))
+    if context and context["converging"]:
+        lines.append(CONVERGENCE_NOTE)
+    pattern = detect_pattern(df, context.get("drawings", [])) if context else None
+    pattern_status, pattern_opinion = pattern_messages(pattern, index=True)
+    pattern_caution = pattern is not None and pattern["state"] in {"down_attempt", "down_holding", "failed_up"}
+    if pattern_caution:
+        summary = "시장 패턴 이탈 주의 · 새 매수는 회복과 안착부터 확인하세요"
+    lines.extend(pattern_status)
     lines.append("🔴 저항선: " + (point(resistance) if resistance is not None else "그려둔 선에서 찾지 못했어요"))
-    if support is not None:
+    lines.extend(["", OPINION_HEADING])
+    lines.extend(pattern_opinion)
+    if pattern_caution:
+        lines.append("🛒 주식 매수: 시장이 패턴 안으로 회복하고 관심종목도 안정을 찾기 전에는 서두르지 마세요.")
+    elif support is not None:
         lines.append(f"🛒 주식 매수: {point(support)} 위 마감·관심종목 회복 확인 후 나누어 살지 판단하세요.")
     else:
         lines.append("🛒 주식 매수: 선이 부족해요. 시장·관심종목 회복부터 확인하세요.")
@@ -51,13 +70,13 @@ def index_market_guide(lines, df, supports, resistances, levels, skipped):
         lines.append(f"날짜나 지수를 확인할 수 없는 선 {skipped}개는 제외했어요.")
     lines.insert(2, summary)
     lines.append("※ 장중 변동·손실 가능. 지수와 개별 종목은 다르게 움직여요.")
-    return "\n".join(lines)
+    return readable_analysis(lines)
 
 
 def analysis_text(stock, drawings, df):
     import pandas as pd
     if df.empty or len(df) < 2:
-        return f"📋 {stock['name']} 차트 리포트\n\n📂 분석 대기\n분석에 필요한 일봉이 부족합니다."
+        return f"【현재 상태】\n{stock['name']} 차트 리포트\n분석에 필요한 일봉이 부족합니다.\n\n{OPINION_HEADING}\n가격 제안은 보류합니다."
     close = float(df.Close.iloc[-1])
     if not math.isfinite(close) or close <= 0:
         raise ValueError("Invalid close")
@@ -70,10 +89,10 @@ def analysis_text(stock, drawings, df):
     lookback = min(5, last)
     base = float(df.Close.iloc[-1-lookback])
     move = (close/base-1)*100 if base > 0 else 0
-    direction = "🔺" if change > 0 else ("🔻" if change < 0 else "▪️")
+    direction = ""
     summary = "🔎 서두르지 말고 지켜보세요"
     lines = [f"📋 {stock['name']} ({stock['code']}) · {df.index[-1]:%m/%d}",
-             f"💰 {price(close)} {direction}{change:+.2f}% · 최근 {lookback}일 {move:+.2f}%"]
+             f"현재가 {price(close)} · 전일 {direction}{change:+.2f}%\n최근 {lookback}일 {move:+.2f}%"]
     if len(df) >= 21:
         average = float(df.Volume.iloc[-21:-1].mean())
         if average > 0:
@@ -102,10 +121,18 @@ def analysis_text(stock, drawings, df):
     supports = sorted({v for v,e in levels if v <= close}, reverse=True)
     resistances = sorted({v for v,e in levels if v > close})
     if index:
-        return index_market_guide(lines, df, supports, resistances, levels, skipped)
+        anchor = supports[0] if supports else (min((v for v, _ in levels), default=None))
+        context = line_context(drawings, df, anchor)
+        context["drawings"] = drawings
+        if supports or context["zone_count"] >= 2:
+            resistances = [context["resistance_price"]] if context["resistance_price"] is not None else []
+        return index_market_guide(lines, df, supports, resistances, levels, skipped, context)
     # Share the screener's historical support identity, even just below it.
     from api.recommendations import check_symbol
     candidate, _, _ = check_symbol(stock, drawings, df=df)
+    pattern = candidate.get("pattern") if candidate is not None else detect_pattern(df, drawings)
+    pattern_status, pattern_opinion = pattern_messages(pattern)
+    lines.extend(pattern_status)
     recovery = candidate is not None and candidate["position"] == "below"
     if candidate is not None and candidate.get("support_status") == "awaiting_confirmation":
         lines.append("🔎 지지선 접근 후보 · 반등은 아직 확인되지 않았어요.")
@@ -115,15 +142,33 @@ def analysis_text(stock, drawings, df):
         resistances = sorted({v for v, _ in levels if v > max(support, close)})
     if recovery:
         lines.append("🟠 지지선 소폭 이탈 · 다시 회복하는지 확인하세요.")
+    anchor = supports[0] if supports else min((v for v, _ in levels), default=None)
+    context = line_context(drawings, df, anchor)
+    if supports or context["zone_count"] >= 2:
+        resistances = [context["resistance_price"]] if context["resistance_price"] is not None else []
+    if context["converging"]:
+        lines.append(CONVERGENCE_NOTE)
     if levels:
         nearest = min(levels, key=lambda item: abs(close-item[0]))
         if nearest[1] and not recovery:
             lines.append(nearest[1])
-        lines.append("🟢 지지선: " + (price(supports[0]) if supports else "확인할 선 없음"))
+        if context["zone_count"] >= 2:
+            lines.append(f"선 밀집 구간: {price(context['zone_low'])}~{price(context['zone_high'])}")
+        else:
+            lines.append("🟢 지지선: " + (price(supports[0]) if supports else "확인할 선 없음"))
         lines.append("🔴 저항선: " + (price(resistances[0]) if resistances else "확인할 선 없음"))
     else:
         lines.append("📂 참고할 수 있는 차트 선이 없어요.")
-    if recovery:
+    lines.extend(["", OPINION_HEADING])
+    lines.extend(pattern_opinion)
+    pattern_caution = pattern is not None and pattern["state"] in {"down_attempt", "down_holding", "failed_up"}
+    if pattern_caution:
+        summary = "패턴 이탈·돌파 실패 주의 · 회복과 안착부터 확인하세요"
+        lines.append("🛒 패턴 안으로 회복하고 안착하기 전에는 새 매수를 서두르지 마세요.")
+        if resistances:
+            lines.append(f"💰 반등한다면 {price(resistances[0])} 부근에서 상승이 막히는지 살펴보세요.")
+        lines.append("🚨 패턴 하단을 회복하지 못하면 추가 하락에 대비해 계획을 다시 살펴보세요.")
+    elif recovery:
         support = candidate["support_price"]
         summary = "🟠 지지선 회복을 확인하고 매수를 살펴보세요"
         lines.append(f"🛒 {price(support)} 부근까지 회복하며 올라올 때 매수를 살펴보세요. 선 아래에서 미리 사기보다 위에 안착하는지 확인하세요.")
@@ -167,6 +212,10 @@ def analysis_text(stock, drawings, df):
         lines.append("HTS에서 그려둔 선을 추가하면 더 자세히 살펴볼 수 있어요.")
     if skipped:
         lines.append(f"날짜나 가격을 확인할 수 없는 선 {skipped}개는 제외했어요.")
+    if context["converging"] and not pattern_caution:
+        summary = "추세선 수렴 중 · 구간을 벗어나 안착하는 방향부터 확인하세요"
+    if context["zone_count"] >= 2:
+        lines = [line.replace("지지선", "기준선") for line in lines]
     lines.insert(2, summary)
     lines.append("※ 장중 수치는 변해요. 선·가격 기반 참고 정보이며 손실이 날 수 있어요.")
-    return "\n".join(lines)
+    return readable_analysis(lines)

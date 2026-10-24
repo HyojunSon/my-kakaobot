@@ -12,8 +12,8 @@ class AnalysisTests(unittest.TestCase):
         for code, name in [("KOSPI", "코스피"), ("KOSDAQ", "코스닥")]:
             text = analysis_text({"code":code, "name":name}, lines, self.df)
             self.assertIn("시장 리포트", text)
-            self.assertIn("주식 매수:", text)
-            self.assertIn("보유 주식:", text)
+            self.assertIn("주식 매수\n", text)
+            self.assertIn("보유 주식\n", text)
             self.assertIn("99.00pt", text)
             self.assertIn("개별 주식의 매도 가격은 아니에요", text)
             self.assertNotIn(name+"을 사고", text)
@@ -48,11 +48,11 @@ class AnalysisTests(unittest.TestCase):
         df["Low"] = 100
         df.loc[dates[-1], "Close"] = 99.5
         text = analysis_text(self.stock, [drawing, {"type": "horizontal", "price": 120}], df)
-        self.assertIn("🟢 지지선: 100원", text)
-        self.assertIn("🔴 저항선: 120원", text)
+        self.assertIn("지지선: 100원", text)
+        self.assertIn("저항선: 120원", text)
         self.assertIn("회복", text)
         self.assertIn("+20.0%", text)
-        self.assertNotIn("🟢 지지선: 확인할 선 없음", text)
+        self.assertNotIn("지지선: 확인할 선 없음", text)
 
     def test_no_lines_does_not_invent_prices(self):
         text = analysis_text(self.stock, [], self.df)

@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 from api.chart_service import load_snapshot, resolve_stock, render_chart
 from api.chart_analysis import analyze_chart
-from api.message_layout import short_bubbles
+from api.message_layout import chart_bubbles
 
 app = FastAPI()
 logger = logging.getLogger(__name__)
@@ -30,18 +30,18 @@ def text_response(text):
 
 
 def recommendation_response(scan, page=1):
-    from api.recommendations import recommendation_text
-    chunks = short_bubbles(recommendation_text(scan))
-    pages = max(1, (len(chunks)+2)//3)
+    from api.recommendations import recommendation_pages
+    chunks = recommendation_pages(scan)
+    pages = len(chunks)
     page = min(max(page, 1), pages)
-    selected = chunks[(page-1)*3:page*3]
+    text, stocks = chunks[page-1]
     result = {"version": "2.0", "template": {"outputs": [
-        {"simpleText": {"text": chunk}} for chunk in selected
+        {"simpleText": {"text": text}}
     ]}}
     if scan["results"]:
         result["template"]["quickReplies"] = [
-            {"label": ("📈 " + stock["name"])[:20], "action": "message", "messageText": "/차트 " + stock["code"]}
-            for stock in scan["results"][:8]
+            {"label": stock["name"][:20], "action": "message", "messageText": "/차트 " + stock["code"]}
+            for stock in stocks[:8]
         ]
     if page < pages:
         result["template"].setdefault("quickReplies", []).append({
@@ -88,10 +88,10 @@ def chart_response(stock, snapshot, image_url):
     except Exception:
         logger.exception("Rule analysis failed for %s", stock["code"])
         text = "분석용 시세를 조회하지 못했습니다. 가격 제안은 보류합니다."
-    chunks = short_bubbles(text, max_chars=420, max_rows=16)
+    chunks = chart_bubbles(text)
     return {"version": "2.0", "template": {"outputs": [
         {"simpleImage": {"imageUrl": image_url, "altText": f"{stock['name']} 최근 6개월 차트"}},
-        *[{"simpleText": {"text": chunk}} for chunk in chunks[:2]]
+        *[{"simpleText": {"text": chunk}} for chunk in chunks]
     ]}}
 
 
