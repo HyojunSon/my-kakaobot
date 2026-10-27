@@ -10,6 +10,8 @@ from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import xml.etree.ElementTree as ET
+from api.analysis_store import source_mode, fetch_analysis_rows
+import copy
 
 ROOT = Path(__file__).resolve().parent.parent
 RENDER_LOCK = threading.Lock()
@@ -34,7 +36,7 @@ def history_count(drawings):
     return min(count, 10000)
 
 @lru_cache(maxsize=1)
-def load_snapshot():
+def _file_snapshot():
     snapshot = json.loads((ROOT / "data/hts_snapshot.json").read_text(encoding="utf-8"))
     catalog_path = ROOT / "data/stock_catalog.json"
     if catalog_path.exists():
@@ -45,6 +47,28 @@ def load_snapshot():
             elif stock["name"] != stock["code"] and stock["name"] != stocks[stock["code"]]["name"]:
                 stocks[stock["code"]].setdefault("aliases", []).append(stock["name"])
         snapshot["stocks"] = list(stocks.values())
+    return snapshot
+
+
+def load_snapshot():
+    if source_mode() == "snapshot":
+        return _file_snapshot()
+    snapshot = copy.deepcopy(_file_snapshot())
+    rows = fetch_analysis_rows()
+    # DB is authoritative, including empty rows and an entirely empty table.
+    snapshot["drawings"] = {r["symbol"]: r["drawings"] for r in rows}
+    stocks = {s["code"]: s for s in snapshot["stocks"]}
+    for row in rows:
+        code = row["symbol"]
+        name = row.get("name") or code
+        if code not in stocks:
+            stocks[code] = {"code": code, "name": name}
+        elif name != code and name != stocks[code]["name"]:
+            stocks[code].setdefault("aliases", []).append(name)
+    snapshot["stocks"] = list(stocks.values())
+    snapshot["analysis_revisions"] = {r["symbol"]: r["revision"] for r in rows}
+    snapshot["exported_at"] = max((r["updated_at"] for r in rows), default=None)
+    snapshot["source"] = "supabase"
     return snapshot
 
 def resolve_stock(query, snapshot):

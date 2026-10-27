@@ -116,7 +116,7 @@ async def chat_handler(request: Request, background_tasks: BackgroundTasks):
         page = int(recommendation_match.group(1) or 1)
         from api.recommendations import scan_recommendations
         try:
-            snapshot = load_snapshot()
+            snapshot = await run_in_threadpool(load_snapshot)
             callback_url = body["userRequest"].get("callbackUrl")
             if isinstance(callback_url, str) and callback_url:
                 if not valid_callback(callback_url):
@@ -132,11 +132,11 @@ async def chat_handler(request: Request, background_tasks: BackgroundTasks):
     if not match:
         return text_response("사용법: /차트 종목명 또는 /종목추천\n예: /차트 이뮨온시아")
     try:
-        snapshot = load_snapshot()
+        snapshot = await run_in_threadpool(load_snapshot)
         stock = resolve_stock(match.group(1), snapshot)
     except (OSError, ValueError):
         logger.exception("Snapshot unavailable")
-        return text_response("HTS 데이터가 준비되지 않았습니다. 관리자에게 동기화를 요청해 주세요.")
+        return text_response("차트 분석 데이터를 불러오지 못했습니다. 잠시 후 다시 요청해 주세요.")
     if stock is None:
         return text_response("등록된 정확한 종목명 또는 6자리 종목코드를 입력해 주세요.")
     base = os.environ.get("PUBLIC_BASE_URL", str(request.base_url)).rstrip("/")
@@ -154,7 +154,7 @@ async def chart_image(symbol: str):
     if not re.fullmatch(r"(?:[0-9A-Z]{6}|KOSPI|KOSDAQ)", symbol):
         raise HTTPException(404, "Unknown symbol")
     try:
-        snapshot = load_snapshot()
+        snapshot = await run_in_threadpool(load_snapshot)
         stock = resolve_stock(symbol, snapshot)
         if stock is None:
             raise HTTPException(404, "Unknown symbol")
